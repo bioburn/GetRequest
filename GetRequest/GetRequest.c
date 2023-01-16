@@ -6,6 +6,8 @@
 #include "curl/curl.h" //for http requests
 #include <conio.h> //for keyboard input without blocking
 #include <time.h> //for elapsed time
+#include <string.h> //for the substring check
+
 
 #ifdef _DEBUG
 #pragma comment (lib, "curl/libcurl_a_debug.lib")
@@ -46,18 +48,20 @@ static size_t cb(void* data, size_t size, size_t nmemb, void* userp)
 struct memory chunk = { 0 };
 
 typedef enum { F, T } bool;
-
+//https://previews.123rf.com/images/fordzolo/fordzolo1506/fordzolo150600296/41026708-example-white-stamp-text-on-red-backgroud.jpg
 
 // main function -
 // where the execution of program begins
 int main(int argc, char* argv[])
 {
+    //If program wasn't supplied a url, we use example.com
+    //Specifications may require us to supply one, but here I'll just default it until I get clarification on the specs
     char* string;
     if (argc > 1) {
         
         string = argv[1];
     }
-    else string = "https://example.com/";
+    else string = "www.example.com";
 
     const char SPACE = ' ';
     const char PLUS = '+';
@@ -84,27 +88,37 @@ int main(int argc, char* argv[])
         if (res != CURLE_OK)
             fprintf(stderr, "curl_easy_perform() failed: %s\n",
                 curl_easy_strerror(res));
-
-
-        int i = 0;
+        
+       
+        //Here we check if the content type is text or not, if so we set our text flag to true
+        boolean text = F;
+        char* ct = NULL;
+        res = curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ct);
+        if (!res && ct && (strstr(ct, "text") != NULL || strstr(ct, "UTF-8") != NULL || strstr(ct, "UTF-16") != NULL)) {
+            //if content type is text, print normally
+            
+            text = T;
+        }
+        //debug
+        //printf("Content-Type: %s\n", ct);
+       
+        //setting up our delta time for printing out X lines per second
         int lineCount = 1;
         float linesPerSecond = 1.0f;
         bool pause = F;
 
         float timePerLine = 1.0f / linesPerSecond;
 
-        
         clock_t t;
         t = clock();
         
         //the printing and user input loop
         //program exits when done printing
-        while (chunk.response[i] != '\0')
+        int i = 0;
+        while ((text==T && chunk.response[i] != '\0') || (text==F && i < chunk.size))
         {
             
             //take user input in this area
-            
-
             //if user hits + or - increase or decrease lines per second
             if (_kbhit()) {
                 char input = _getch();
@@ -139,8 +153,9 @@ int main(int argc, char* argv[])
             }
 
 
-            //otherwise print
 
+            //Here we do the printing
+            // 
             //take time now - previoustime = elapsed time
             //if elapsed time < timeperline (seconds per line = 1 second / number of lines per second
             //wait
@@ -149,19 +164,41 @@ int main(int argc, char* argv[])
             time_t now = time(NULL);
             float deltaTime = ((float)(clock() - (float)t) / CLOCKS_PER_SEC);
             if ( deltaTime >= timePerLine) {
-               
-                printf("%d", lineCount);
-                while (chunk.response[i] != '\n') {
-                    putchar(chunk.response[i]);
-                    i++;
-                }
-                
-                putchar('\n');
 
-                lineCount++;
-                i++;
-                
-                t = clock();
+                //if our resource was a text
+                if (text == T) {
+                    printf("%d", lineCount);
+
+                    //This builds the line in the current iteration
+                    while (chunk.response[i] != '\n') {
+                        putchar(chunk.response[i]);
+                        i++;
+                    }
+                    //classic trailing space/newline problem
+                    putchar('\n');
+
+                    lineCount++;
+                    i++;
+                    t = clock();
+                }
+
+                //if it wasn't a text
+                else if (text == F) {
+                    
+                    while ((i + 1) % 16 != 0) {
+                        printf("%02x", lineCount);
+                        printf("%02x ", chunk.response[i]);
+                        i++;
+                    }
+                    printf("%02x", lineCount);
+                    printf("%02x ", chunk.response[i]);
+                    putchar('\n');
+
+                    lineCount++;
+                    i++;
+                    t = clock();
+                    
+                }
             }
             
             
